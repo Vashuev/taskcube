@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team Task Hub</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Frappe Gantt -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.min.js"></script>
+  <style>
+    .gantt .bar-progress { fill: #3b82f6; }
+    .gantt .bar { fill: #93c5fd; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+  <!-- Navigation Bar -->
+  <nav class="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-lg shadow-sm">T</div>
+        <span class="text-xl font-bold tracking-tight">TaskHub</span>
+        <span id="roleBadge" class="text-xs px-2.5 py-0.5 rounded-full font-semibold ml-2">Loading...</span>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-slate-500 font-medium">Viewing as:</label>
+          <select id="userSelector" class="text-sm bg-slate-100 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="switchUser()">
+            <!-- Loaded dynamically from Users sheet -->
+          </select>
+        </div>
+        <button onclick="openTaskModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm transition">
+          + New Task
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- View Toggle Tabs -->
+    <div class="flex justify-between items-center mb-6">
+      <div class="flex bg-slate-200/80 p-1 rounded-xl text-sm font-medium">
+        <button onclick="switchView('list')" id="tabList" class="px-4 py-1.5 rounded-lg bg-white shadow-sm text-slate-900 transition">List View</button>
+        <button onclick="switchView('gantt')" id="tabGantt" class="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">Gantt Timeline</button>
+        <button onclick="switchView('charts')" id="tabCharts" class="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">Analytics</button>
+      </div>
+      
+      <!-- Quick Status Badges -->
+      <div class="flex gap-2 text-xs font-semibold">
+        <span id="statTotal" class="bg-white border border-slate-200 px-3 py-1.5 rounded-lg">Total: 0</span>
+        <span id="statPending" class="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg">Pending: 0</span>
+        <span id="statOverdue" class="bg-rose-50 text-rose-700 border border-rose-200 px-3 py-1.5 rounded-lg">Overdue: 0</span>
+        <span id="statDone" class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg">Done: 0</span>
+      </div>
+    </div>
+
+    <!-- VIEW 1: TASK LIST -->
+    <section id="viewList" class="space-y-4">
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+        <table class="w-full text-left text-sm border-collapse">
+          <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-xs">
+            <tr>
+              <th class="p-4">Title / Details</th>
+              <th class="p-4">Assigned To</th>
+              <th class="p-4">Priority</th>
+              <th class="p-4">Timeline</th>
+              <th class="p-4">Status</th>
+              <th class="p-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="taskTableBody" class="divide-y divide-slate-100">
+            <tr><td colspan="6" class="p-6 text-center text-slate-400">Loading tasks...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VIEW 2: GANTT TIMELINE -->
+    <section id="viewGantt" class="hidden">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-slate-800">Timeline Schedule</h3>
+          <div class="flex gap-2">
+            <button onclick="changeGanttMode('Day')" class="text-xs bg-slate-100 px-3 py-1 rounded">Day</button>
+            <button onclick="changeGanttMode('Week')" class="text-xs bg-slate-100 px-3 py-1 rounded font-semibold text-blue-600">Week</button>
+            <button onclick="changeGanttMode('Month')" class="text-xs bg-slate-100 px-3 py-1 rounded">Month</button>
+          </div>
+        </div>
+        <div id="ganttChart" class="overflow-x-auto min-h-[350px]"></div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: ANALYTICS / GRAPHS -->
+    <section id="viewCharts" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h3 class="font-bold text-slate-800 mb-4">Task Status Distribution</h3>
+        <div class="h-64 flex items-center justify-center">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h3 class="font-bold text-slate-800 mb-4">Workload by Priority</h3>
+        <div class="h-64 flex items-center justify-center">
+          <canvas id="priorityChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Create/Edit Modal -->
+  <div id="taskModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+      <h2 id="modalTitle" class="text-lg font-bold text-slate-900">Create New Task</h2>
+      <form id="taskForm" onsubmit="submitTask(event)" class="space-y-3">
+        <input type="hidden" id="formTaskId" />
+        
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Title</label>
+          <input type="text" id="formTitle" required class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Description</label>
+          <textarea id="formDescription" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Priority</label>
+            <select id="formPriority" class="w-full border rounded-lg px-3 py-2 text-sm outline-none">
+              <option value="High">High</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+          <div id="assigneeWrapper">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Assign To</label>
+            <select id="formAssignedTo" class="w-full border rounded-lg px-3 py-2 text-sm outline-none"></select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Start Date</label>
+            <input type="date" id="formStartDate" class="w-full border rounded-lg px-3 py-2 text-sm outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Deadline</label>
+            <input type="date" id="formDeadline" required class="w-full border rounded-lg px-3 py-2 text-sm outline-none" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Tags (Comma-separated)</label>
+          <input type="text" id="formTags" placeholder="Feature, Urgent, Client" class="w-full border rounded-lg px-3 py-2 text-sm outline-none" />
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t">
+          <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-sm text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Cancel</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-blue-600 text-white font-medium hover:bg-blue-700 rounded-lg">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    // PASTE YOUR APPS SCRIPT WEB APP URL HERE:
+    const API_URL = "https://script.google.com/macros/s/AKfycbw0oI-CMVrWt85m5fGnAyGRrZmjX9PuY_XoysQg5fEoU_Sr0jFpHqNAyxYtw1PxjfDkgA/exec";
+
+    let state = {
+      currentUser: null,
+      users: [],
+      tasks: [],
+      ganttInstance: null,
+      statusChart: null,
+      priorityChart: null
+    };
+
+    async function init() {
+      // 1. Fetch assignable users
+      const res = await fetch(`${API_URL}?action=getAssignableUsers`);
+      state.users = await res.json();
+      
+      const userSelect = document.getElementById("userSelector");
+      const formAssignSelect = document.getElementById("formAssignedTo");
+      
+      userSelect.innerHTML = "";
+      formAssignSelect.innerHTML = "";
+
+      state.users.forEach((u, i) => {
+        userSelect.innerHTML += `<option value="${u.email}">${u.name} (${u.role})</option>`;
+        formAssignSelect.innerHTML += `<option value="${u.email}">${u.name} (${u.email})</option>`;
+      });
+
+      // Default user
+      state.currentUser = state.users[0];
+      updateUserContextUI();
+      await fetchTasks();
+    }
+
+    function switchUser() {
+      const selectedEmail = document.getElementById("userSelector").value;
+      state.currentUser = state.users.find(u => u.email === selectedEmail);
+      updateUserContextUI();
+      fetchTasks();
+    }
+
+    function updateUserContextUI() {
+      const badge = document.getElementById("roleBadge");
+      const isAdmin = state.currentUser.role.toLowerCase() === 'admin';
+      badge.textContent = state.currentUser.role;
+      badge.className = `text-xs px-2.5 py-0.5 rounded-full font-semibold ml-2 ${
+        isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+      }`;
+      document.getElementById("assigneeWrapper").style.display = isAdmin ? 'block' : 'none';
+    }
+
+    async function fetchTasks() {
+      const res = await fetch(`${API_URL}?action=getTasks&userEmail=${encodeURIComponent(state.currentUser.email)}`);
+      state.tasks = await res.json();
+      renderTasks();
+      updateStats();
+      renderCharts();
+    }
+
+    function renderTasks() {
+      const tbody = document.getElementById("taskTableBody");
+      if (!state.tasks.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">No tasks found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = state.tasks.map(t => {
+        const priorityColors = {
+          High: 'bg-rose-100 text-rose-700',
+          Medium: 'bg-amber-100 text-amber-700',
+          Low: 'bg-emerald-100 text-emerald-700'
+        }[t.Priority] || 'bg-slate-100 text-slate-700';
+
+        const statusBadge = t.derivedStatus === 'Overdue' 
+          ? `<span class="px-2.5 py-1 bg-red-100 text-red-700 font-bold rounded-md text-xs">⚠️ Overdue</span>`
+          : `<span class="px-2.5 py-1 bg-slate-100 text-slate-700 font-semibold rounded-md text-xs">${t.Status}</span>`;
+
+        // Permission: Delete button appears ONLY if user is Admin OR self-created & assigned
+        const deleteBtn = t.canDelete 
+          ? `<button onclick="deleteTask('${t.Task_ID}')" class="text-rose-600 hover:text-rose-800 p-1" title="Delete">🗑️</button>` 
+          : `<span class="text-slate-300 p-1 cursor-not-allowed" title="Assigned by Manager - Cannot delete">🔒</span>`;
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition">
+            <td class="p-4">
+              <div class="font-semibold text-slate-900">${t.Title}</div>
+              <div class="text-xs text-slate-400">${t.Description || 'No details'}</div>
+              <div class="mt-1">${(t.Tags || '').split(',').filter(Boolean).map(tag => `<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded mr-1">#${tag.trim()}</span>`).join('')}</div>
+            </td>
+            <td class="p-4 text-xs font-medium text-slate-600">${t.Assigned_To}</td>
+            <td class="p-4"><span class="px-2 py-0.5 rounded text-xs font-semibold ${priorityColors}">${t.Priority}</span></td>
+            <td class="p-4 text-xs text-slate-500">
+              <div>Start: ${t.Start_Date || '-'}</div>
+              <div>Due: ${t.Deadline || '-'}</div>
+            </td>
+            <td class="p-4">${statusBadge}</td>
+            <td class="p-4 text-right">
+              <select onchange="updateStatus('${t.Task_ID}', this.value)" class="text-xs border rounded px-1.5 py-1 mr-2 outline-none">
+                <option value="Not Started" ${t.Status === 'Not Started' ? 'selected' : ''}>Not Started</option>
+                <option value="In Progress" ${t.Status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                <option value="Completed" ${t.Status === 'Completed' ? 'selected' : ''}>Completed</option>
+              </select>
+              ${deleteBtn}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function updateStats() {
+      const total = state.tasks.length;
+      const completed = state.tasks.filter(t => t.Status === 'Completed').length;
+      const overdue = state.tasks.filter(t => t.derivedStatus === 'Overdue').length;
+      const pending = total - completed;
+
+      document.getElementById('statTotal').innerText = `Total: ${total}`;
+      document.getElementById('statPending').innerText = `Pending: ${pending}`;
+      document.getElementById('statOverdue').innerText = `Overdue: ${overdue}`;
+      document.getElementById('statDone').innerText = `Done: ${completed}`;
+    }
+
+    async function updateStatus(taskId, status) {
+      await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'updateTaskStatus', taskId, status, userEmail: state.currentUser.email })
+      });
+      fetchTasks();
+    }
+
+    async function deleteTask(taskId) {
+      if (!confirm("Are you sure you want to delete this task?")) return;
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'deleteTask', taskId, userEmail: state.currentUser.email })
+      });
+      const data = await res.json();
+      if (data.error) alert(data.error);
+      fetchTasks();
+    }
+
+    async function submitTask(e) {
+      e.preventDefault();
+      const payload = {
+        action: 'saveTask',
+        userEmail: state.currentUser.email,
+        taskData: {
+          Title: document.getElementById('formTitle').value,
+          Description: document.getElementById('formDescription').value,
+          Priority: document.getElementById('formPriority').value,
+          Assigned_To: document.getElementById('formAssignedTo').value || state.currentUser.email,
+          Start_Date: document.getElementById('formStartDate').value,
+          Deadline: document.getElementById('formDeadline').value,
+          Tags: document.getElementById('formTags').value,
+          Status: 'Not Started'
+        }
+      };
+
+      await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+      closeTaskModal();
+      fetchTasks();
+    }
+
+    function switchView(view) {
+      document.getElementById('viewList').classList.toggle('hidden', view !== 'list');
+      document.getElementById('viewGantt').classList.toggle('hidden', view !== 'gantt');
+      document.getElementById('viewCharts').classList.toggle('hidden', view !== 'charts');
+
+      ['tabList', 'tabGantt', 'tabCharts'].forEach(t => {
+        document.getElementById(t).className = "px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition";
+      });
+      document.getElementById(`tab${view.charAt(0).toUpperCase() + view.slice(1)}`).className = "px-4 py-1.5 rounded-lg bg-white shadow-sm text-slate-900 transition";
+
+      if (view === 'gantt') renderGantt();
+      if (view === 'charts') renderCharts();
+    }
+
+    function renderGantt() {
+      const container = document.getElementById("ganttChart");
+      container.innerHTML = "";
+
+      const formatted = state.tasks.filter(t => t.Deadline).map(t => ({
+        id: t.Task_ID,
+        name: t.Title,
+        start: (t.Start_Date || t.Created_At || new Date().toISOString()).split(' ')[0],
+        end: t.Deadline.split(' ')[0],
+        progress: t.Status === 'Completed' ? 100 : (t.Status === 'In Progress' ? 50 : 10)
+      }));
+
+      if (!formatted.length) {
+        container.innerHTML = `<div class="p-6 text-center text-slate-400">No scheduled tasks for timeline.</div>`;
+        return;
+      }
+
+      state.ganttInstance = new Gantt("#ganttChart", formatted, {
+        view_mode: 'Week',
+        date_format: 'YYYY-MM-DD'
+      });
+    }
+
+    function changeGanttMode(mode) {
+      if (state.ganttInstance) state.ganttInstance.change_view_mode(mode);
+    }
+
+    function renderCharts() {
+      const statusCounts = { Completed: 0, Overdue: 0, "In Progress": 0, "Not Started": 0 };
+      const priorityCounts = { High: 0, Medium: 0, Low: 0 };
+
+      state.tasks.forEach(t => {
+        if (t.derivedStatus === 'Overdue') statusCounts.Overdue++;
+        else statusCounts[t.Status] = (statusCounts[t.Status] || 0) + 1;
+
+        priorityCounts[t.Priority] = (priorityCounts[t.Priority] || 0) + 1;
+      });
+
+      if (state.statusChart) state.statusChart.destroy();
+      if (state.priorityChart) state.priorityChart.destroy();
+
+      state.statusChart = new Chart(document.getElementById('statusChart'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Completed', 'In Progress', 'Not Started', 'Overdue'],
+          datasets: [{ data: [statusCounts.Completed, statusCounts["In Progress"], statusCounts["Not Started"], statusCounts.Overdue], backgroundColor: ['#10b981', '#3b82f6', '#94a3b8', '#ef4444'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      state.priorityChart = new Chart(document.getElementById('priorityChart'), {
+        type: 'bar',
+        data: {
+          labels: ['High', 'Medium', 'Low'],
+          datasets: [{ label: 'Tasks', data: [priorityCounts.High, priorityCounts.Medium, priorityCounts.Low], backgroundColor: ['#f43f5e', '#f59e0b', '#10b981'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    function openTaskModal() { document.getElementById('taskModal').classList.replace('hidden', 'flex'); }
+    function closeTaskModal() { document.getElementById('taskModal').classList.replace('flex', 'hidden'); }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
