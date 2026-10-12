@@ -26,7 +26,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.min.js"></script>
   <style>
     /* Dark Theme Overrides for Frappe Gantt */
-    .gantt-container { overflow-x: auto; min-width: 100%; }
     .gantt .grid-header { fill: #111827; stroke: #1f2937; }
     .gantt .grid-row { fill: #0b0f19; stroke: #1f2937; }
     .gantt .grid-row:nth-child(even) { fill: #0e1422; }
@@ -44,7 +43,7 @@
       <div class="absolute -top-16 -left-16 w-44 h-44 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
       
       <div class="flex items-center gap-3 mb-6">
-        <div class="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-600/30">
+        <div class="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-600/30">
           🧊
         </div>
         <div>
@@ -123,10 +122,9 @@
         </div>
       </div>
 
-      <!-- VIEW 1: TASK BOARD (SEPARATED TABLES) -->
+      <!-- VIEW 1: TASK BOARD -->
       <section id="viewList" class="space-y-8">
-        
-        <!-- SECTION 1A: ACTIVE & PENDING TASKS -->
+        <!-- 1A: ACTIVE TASKS -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
@@ -135,7 +133,6 @@
             <span id="activeCountBadge" class="text-[11px] bg-dark-900 text-slate-400 px-2.5 py-0.5 rounded-full border border-slate-800">0 items</span>
           </div>
 
-          <!-- Desktop Table -->
           <div class="hidden md:block bg-dark-900 rounded-2xl border border-slate-800/90 overflow-hidden shadow-xl">
             <table class="w-full text-left text-sm border-collapse">
               <thead class="bg-dark-950/70 border-b border-slate-800 text-slate-400 font-semibold uppercase text-[11px] tracking-wider">
@@ -143,7 +140,7 @@
                   <th class="p-4">Task Details</th>
                   <th class="p-4">Assigned Member</th>
                   <th class="p-4">Priority</th>
-                  <th class="p-4">Timeline</th>
+                  <th class="p-4">Timeline (Dates)</th>
                   <th class="p-4">Status</th>
                   <th class="p-4 text-right">Actions</th>
                 </tr>
@@ -153,21 +150,18 @@
               </tbody>
             </table>
           </div>
-
-          <!-- Mobile Cards -->
           <div id="activeMobileCards" class="grid grid-cols-1 gap-3 md:hidden"></div>
         </div>
 
-        <!-- SECTION 1B: COMPLETED TASKS (RECENT) -->
+        <!-- 1B: COMPLETED TASKS -->
         <div class="space-y-3 pt-4 border-t border-slate-800/80">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Completed Tasks (Recent < 5 Days)
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Completed Tasks (Recent &lt; 5 Days)
             </h3>
             <span id="completedCountBadge" class="text-[11px] bg-dark-900 text-slate-400 px-2.5 py-0.5 rounded-full border border-slate-800">0 items</span>
           </div>
 
-          <!-- Desktop Table -->
           <div class="hidden md:block bg-dark-900 rounded-2xl border border-slate-800/90 overflow-hidden shadow-xl">
             <table class="w-full text-left text-sm border-collapse">
               <thead class="bg-dark-950/70 border-b border-slate-800 text-slate-400 font-semibold uppercase text-[11px] tracking-wider">
@@ -175,7 +169,7 @@
                   <th class="p-4">Task Details</th>
                   <th class="p-4">Assigned Member</th>
                   <th class="p-4">Priority</th>
-                  <th class="p-4">Timeline</th>
+                  <th class="p-4">Timeline (Dates)</th>
                   <th class="p-4">Status</th>
                   <th class="p-4 text-right">Actions</th>
                 </tr>
@@ -185,11 +179,8 @@
               </tbody>
             </table>
           </div>
-
-          <!-- Mobile Cards -->
           <div id="completedMobileCards" class="grid grid-cols-1 gap-3 md:hidden"></div>
         </div>
-
       </section>
 
       <!-- VIEW 2: GANTT TIMELINE -->
@@ -206,8 +197,8 @@
               <button onclick="changeGanttMode('Month')" id="ganttModeMonth" class="px-3 py-1 rounded-lg text-slate-400 hover:text-white">Month</button>
             </div>
           </div>
-          <div class="overflow-x-auto rounded-xl border border-slate-800/80 bg-dark-950 p-3 min-h-[360px]">
-            <div id="ganttChart"></div>
+          <div class="overflow-x-auto rounded-xl border border-slate-800/80 bg-dark-950 p-4 min-h-[360px]">
+            <svg id="ganttSvg" style="width: 100%; min-height: 320px;"></svg>
           </div>
         </div>
       </section>
@@ -293,9 +284,9 @@
 
   <!-- ================= APP CLIENT ENGINE ================= -->
   <script>
-    // PASTE YOUR APPS SCRIPT WEB APP URL HERE:
+    // REPLACE WITH YOUR PUBLISHED APPS SCRIPT WEB APP URL:
     const API_URL = "https://script.google.com/macros/s/AKfycbw0oI-CMVrWt85m5fGnAyGRrZmjX9PuY_XoysQg5fEoU_Sr0jFpHqNAyxYtw1PxjfDkgA/exec";
-    
+
     let state = {
       currentUser: null,
       assignableUsers: [],
@@ -306,10 +297,21 @@
       priorityChart: null
     };
 
-    // Helper: Formats string into clean YYYY-MM-DD
-    function formatDateOnly(dateStr) {
-      if (!dateStr) return '-';
-      return dateStr.toString().split(' ')[0].split('T')[0];
+    /**
+     * Converts any date input to strictly clean date format: YYYY-MM-DD
+     * Eliminates weekday names ("Mon", "Tue") or timestamps.
+     */
+    function cleanDate(val) {
+      if (!val) return '-';
+      const d = new Date(val);
+      if (isNaN(d.getTime())) {
+        // Fallback: try taking first part before space/T
+        return val.toString().split(' ')[0].split('T')[0];
+      }
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
     }
 
     window.onload = () => {
@@ -324,7 +326,7 @@
 
     async function handleLogin(e) {
       e.preventDefault();
-      const email = document.getElementById('loginEmail').value.trim();
+      const email = document.getElementById('loginEmail').value.trim().toLowerCase();
       const alertBox = document.getElementById('loginAlert');
       const submitBtn = document.getElementById('loginSubmitBtn');
 
@@ -418,7 +420,9 @@
       document.getElementById("activeCountBadge").innerText = `${activeTasks.length} items`;
       document.getElementById("completedCountBadge").innerText = `${completedTasks.length} items`;
 
-      // Helper function to build a table row
+      const currEmail = (state.currentUser.email || '').toLowerCase().trim();
+      const isAdmin = !!state.currentUser.isAdmin;
+
       const buildRow = (t) => {
         const priorityBadge = {
           High: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
@@ -432,7 +436,11 @@
             ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">✓ Done</span>`
             : `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-dark-950 border border-slate-700 text-slate-300">${t.Status}</span>`);
 
-        const deleteAction = t.canDelete 
+        // Check: user can delete if admin OR if current email matches Created_By
+        const taskCreatedBy = (t.Created_By || '').toLowerCase().trim();
+        const canDelete = isAdmin || (taskCreatedBy === currEmail);
+
+        const deleteAction = canDelete 
           ? `<button onclick="deleteTask('${t.Task_ID}')" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-dark-800" title="Delete Task">🗑️</button>` 
           : `<span class="text-slate-600 p-1.5 cursor-not-allowed" title="Assigned by Admin - Non-deletable">🔒</span>`;
 
@@ -446,8 +454,8 @@
             <td class="p-4 text-xs text-slate-300">${t.Assigned_To}</td>
             <td class="p-4"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${priorityBadge}">${t.Priority}</span></td>
             <td class="p-4 text-xs text-slate-400 whitespace-nowrap">
-              <div>Start: <span class="text-slate-300 font-mono">${formatDateOnly(t.Start_Date)}</span></div>
-              <div>Due: <span class="text-slate-200 font-mono font-semibold">${formatDateOnly(t.Deadline)}</span></div>
+              <div>Start: <span class="text-slate-200 font-mono">${cleanDate(t.Start_Date)}</span></div>
+              <div>Due: <span class="text-slate-200 font-mono font-semibold">${cleanDate(t.Deadline)}</span></div>
             </td>
             <td class="p-4">${statusBadge}</td>
             <td class="p-4 text-right">
@@ -462,9 +470,11 @@
         `;
       };
 
-      // Helper function to build a mobile card
       const buildCard = (t) => {
-        const deleteAction = t.canDelete 
+        const taskCreatedBy = (t.Created_By || '').toLowerCase().trim();
+        const canDelete = isAdmin || (taskCreatedBy === currEmail);
+
+        const deleteAction = canDelete 
           ? `<button onclick="deleteTask('${t.Task_ID}')" class="text-rose-400 p-1">🗑️</button>` 
           : `<span class="text-slate-600 p-1">🔒</span>`;
 
@@ -478,7 +488,7 @@
             </div>
             <p class="text-xs text-slate-400">${t.Description || 'No description'}</p>
             <div class="flex justify-between items-center text-xs text-slate-400 border-t border-slate-800/80 pt-2">
-              <span class="font-mono">Due: ${formatDateOnly(t.Deadline)}</span>
+              <span class="font-mono">Due: ${cleanDate(t.Deadline)}</span>
               <div class="flex items-center gap-2">
                 <select onchange="updateStatus('${t.Task_ID}', this.value)" class="bg-dark-950 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1">
                   <option value="Not Started" ${t.Status === 'Not Started' ? 'selected' : ''}>Not Started</option>
@@ -492,16 +502,14 @@
         `;
       };
 
-      // Populate Active Table
       if (!activeTasks.length) {
-        activeTbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">No active tasks right now! Great job.</td></tr>`;
+        activeTbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">No active tasks right now!</td></tr>`;
         activeMobile.innerHTML = `<div class="p-6 text-center text-slate-500 bg-dark-900 rounded-xl border border-slate-800">No active tasks.</div>`;
       } else {
         activeTbody.innerHTML = activeTasks.map(buildRow).join('');
         activeMobile.innerHTML = activeTasks.map(buildCard).join('');
       }
 
-      // Populate Completed Table
       if (!completedTasks.length) {
         completedTbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">No recently completed tasks.</td></tr>`;
         completedMobile.innerHTML = `<div class="p-6 text-center text-slate-500 bg-dark-900 rounded-xl border border-slate-800">No completed tasks.</div>`;
@@ -586,28 +594,38 @@
       });
       document.getElementById(`tab${view.charAt(0).toUpperCase() + view.slice(1)}`).className = "px-4 py-2 rounded-lg bg-indigo-600 text-white shadow-sm transition";
 
-      if (view === 'gantt') renderGantt();
-      if (view === 'charts') renderCharts();
+      // Important: Ensure Gantt recomputes SVG dimensions after unhiding container
+      if (view === 'gantt') {
+        setTimeout(renderGantt, 50);
+      }
+      if (view === 'charts') {
+        setTimeout(renderCharts, 50);
+      }
     }
 
     // ================= ROBUST GANTT RENDERER =================
     function renderGantt() {
-      const container = document.getElementById("ganttChart");
-      container.innerHTML = "";
+      const svg = document.getElementById("ganttSvg");
+      svg.innerHTML = "";
 
-      // Exclude completed or undated tasks from cluttering the roadmap
       const activeSchedulable = state.tasks.filter(t => t.Deadline && t.Status !== 'Completed');
 
       if (!activeSchedulable.length) {
-        container.innerHTML = `<div class="p-8 text-center text-slate-500">No active scheduled tasks to plot on the timeline.</div>`;
+        svg.outerHTML = `<div id="ganttSvg" class="p-8 text-center text-slate-500">No active scheduled tasks to plot on the timeline.</div>`;
         return;
       }
 
-      const formatted = activeSchedulable.map(t => {
-        let start = formatDateOnly(t.Start_Date || t.Created_At || new Date());
-        let end = formatDateOnly(t.Deadline);
+      // Re-create SVG element if it was replaced with fallback div
+      if (svg.tagName.toLowerCase() !== 'svg') {
+        const parent = svg.parentElement;
+        parent.innerHTML = `<svg id="ganttSvg" style="width: 100%; min-height: 320px;"></svg>`;
+      }
 
-        // Frappe Gantt requires end >= start
+      const formatted = activeSchedulable.map(t => {
+        let start = cleanDate(t.Start_Date || t.Created_At || new Date());
+        let end = cleanDate(t.Deadline);
+
+        // Frappe Gantt requires valid YYYY-MM-DD and end > start
         if (new Date(end) <= new Date(start)) {
           const nextDay = new Date(start);
           nextDay.setDate(nextDay.getDate() + 1);
@@ -624,7 +642,7 @@
       });
 
       try {
-        state.ganttInstance = new Gantt("#ganttChart", formatted, {
+        state.ganttInstance = new Gantt("#ganttSvg", formatted, {
           view_mode: 'Week',
           date_format: 'YYYY-MM-DD',
           custom_popup_html: function(task) {
@@ -638,7 +656,6 @@
         });
       } catch (err) {
         console.error("Gantt build error:", err);
-        container.innerHTML = `<div class="p-4 text-center text-rose-400 text-xs">Error rendering timeline. Please verify task dates.</div>`;
       }
     }
 
