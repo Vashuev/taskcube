@@ -1,283 +1,432 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Team Task Hub</title>
+  <title>TaskHub Portal</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 500: '#6366f1', 600: '#4f46e5' },
+            dark: { 900: '#0b0f19', 800: '#111827', 700: '#1f2937', 600: '#374151' }
+          }
+        }
+      }
+    }
+  </script>
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Frappe Gantt -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.min.js"></script>
   <style>
-    .gantt .bar-progress { fill: #3b82f6; }
-    .gantt .bar { fill: #93c5fd; }
+    /* Dark Theme Overrides for Frappe Gantt */
+    .gantt .grid-header { fill: #1e293b; stroke: #334155; }
+    .gantt .grid-row { fill: #0f172a; stroke: #1e293b; }
+    .gantt .grid-row:nth-child(even) { fill: #141e33; }
+    .gantt text { fill: #94a3b8; font-size: 11px; }
+    .gantt .bar-progress { fill: #6366f1; }
+    .gantt .bar { fill: #334155; stroke: #475569; }
+    .gantt .bar-label { fill: #f8fafc; font-weight: 500; }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
+<body class="bg-dark-900 text-slate-100 min-h-screen font-sans antialiased selection:bg-indigo-500 selection:text-white">
 
-  <!-- Navigation Bar -->
-  <nav class="bg-white border-b border-slate-200 sticky top-0 z-30">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-lg shadow-sm">T</div>
-        <span class="text-xl font-bold tracking-tight">TaskHub</span>
-        <span id="roleBadge" class="text-xs px-2.5 py-0.5 rounded-full font-semibold ml-2">Loading...</span>
-      </div>
-
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2">
-          <label class="text-xs text-slate-500 font-medium">Viewing as:</label>
-          <select id="userSelector" class="text-sm bg-slate-100 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="switchUser()">
-            <!-- Loaded dynamically from Users sheet -->
-          </select>
+  <!-- ================= AUTH / LOGIN VIEW ================= -->
+  <div id="loginScreen" class="fixed inset-0 z-50 flex items-center justify-center bg-dark-900/90 backdrop-blur-md px-4">
+    <div class="max-w-md w-full bg-dark-800 border border-slate-700/60 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+      <div class="absolute -top-16 -left-16 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-600/30">T</div>
+        <div>
+          <h2 class="text-xl font-bold tracking-tight text-white">TaskHub Workspace</h2>
+          <p class="text-xs text-slate-400">Sign in with your registered team email</p>
         </div>
-        <button onclick="openTaskModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm transition">
-          + New Task
+      </div>
+
+      <div id="loginAlert" class="hidden mb-4 p-3 rounded-lg text-xs bg-rose-500/10 border border-rose-500/20 text-rose-400"></div>
+
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Email Address</label>
+          <input type="email" id="loginEmail" required placeholder="name@domain.com" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition" />
+        </div>
+        <button type="submit" id="loginSubmitBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl text-sm transition shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2">
+          <span>Authenticate & Enter</span>
         </button>
-      </div>
+      </form>
     </div>
-  </nav>
+  </div>
 
-  <!-- Main Container -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <!-- ================= MAIN APP VIEW ================= -->
+  <div id="appContainer" class="hidden min-h-screen flex flex-col">
 
-    <!-- View Toggle Tabs -->
-    <div class="flex justify-between items-center mb-6">
-      <div class="flex bg-slate-200/80 p-1 rounded-xl text-sm font-medium">
-        <button onclick="switchView('list')" id="tabList" class="px-4 py-1.5 rounded-lg bg-white shadow-sm text-slate-900 transition">List View</button>
-        <button onclick="switchView('gantt')" id="tabGantt" class="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">Gantt Timeline</button>
-        <button onclick="switchView('charts')" id="tabCharts" class="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">Analytics</button>
+    <!-- Header Navbar -->
+    <header class="bg-dark-800/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-indigo-600/30">T</div>
+          <span class="text-lg font-bold tracking-tight text-white hidden sm:inline">TaskHub</span>
+          <span id="roleBadge" class="text-[11px] px-2.5 py-0.5 rounded-full font-bold ml-1"></span>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="text-right hidden sm:block">
+            <div id="userNameDisplay" class="text-xs font-semibold text-white"></div>
+            <div id="userEmailDisplay" class="text-[10px] text-slate-400"></div>
+          </div>
+          <button onclick="openTaskModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm shadow-lg shadow-indigo-600/25 transition">
+            + New Task
+          </button>
+          <button onclick="logout()" class="p-2 text-slate-400 hover:text-rose-400 hover:bg-dark-700 rounded-xl transition" title="Sign Out">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+          </button>
+        </div>
       </div>
-      
-      <!-- Quick Status Badges -->
-      <div class="flex gap-2 text-xs font-semibold">
-        <span id="statTotal" class="bg-white border border-slate-200 px-3 py-1.5 rounded-lg">Total: 0</span>
-        <span id="statPending" class="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg">Pending: 0</span>
-        <span id="statOverdue" class="bg-rose-50 text-rose-700 border border-rose-200 px-3 py-1.5 rounded-lg">Overdue: 0</span>
-        <span id="statDone" class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg">Done: 0</span>
-      </div>
-    </div>
+    </header>
 
-    <!-- VIEW 1: TASK LIST -->
-    <section id="viewList" class="space-y-4">
-      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-        <table class="w-full text-left text-sm border-collapse">
-          <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-xs">
-            <tr>
-              <th class="p-4">Title / Details</th>
-              <th class="p-4">Assigned To</th>
-              <th class="p-4">Priority</th>
-              <th class="p-4">Timeline</th>
-              <th class="p-4">Status</th>
-              <th class="p-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="taskTableBody" class="divide-y divide-slate-100">
-            <tr><td colspan="6" class="p-6 text-center text-slate-400">Loading tasks...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <!-- Main Content Area -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
 
-    <!-- VIEW 2: GANTT TIMELINE -->
-    <section id="viewGantt" class="hidden">
-      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="font-bold text-slate-800">Timeline Schedule</h3>
-          <div class="flex gap-2">
-            <button onclick="changeGanttMode('Day')" class="text-xs bg-slate-100 px-3 py-1 rounded">Day</button>
-            <button onclick="changeGanttMode('Week')" class="text-xs bg-slate-100 px-3 py-1 rounded font-semibold text-blue-600">Week</button>
-            <button onclick="changeGanttMode('Month')" class="text-xs bg-slate-100 px-3 py-1 rounded">Month</button>
+      <!-- View Switcher & Live Stats -->
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="flex bg-dark-800 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+          <button onclick="switchView('list')" id="tabList" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white shadow-sm transition">Task Board</button>
+          <button onclick="switchView('gantt')" id="tabGantt" class="px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition">Gantt Timeline</button>
+          <button onclick="switchView('charts')" id="tabCharts" class="px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition">Analytics</button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full md:w-auto text-xs font-bold">
+          <div class="bg-dark-800 border border-slate-800 px-3 py-2 rounded-xl flex items-center justify-between sm:justify-start gap-2">
+            <span class="text-slate-400">Total:</span><span id="statTotal" class="text-white">0</span>
+          </div>
+          <div class="bg-dark-800 border border-slate-800 px-3 py-2 rounded-xl flex items-center justify-between sm:justify-start gap-2">
+            <span class="text-amber-400">Pending:</span><span id="statPending" class="text-amber-400">0</span>
+          </div>
+          <div class="bg-dark-800 border border-slate-800 px-3 py-2 rounded-xl flex items-center justify-between sm:justify-start gap-2">
+            <span class="text-rose-400">Overdue:</span><span id="statOverdue" class="text-rose-400">0</span>
+          </div>
+          <div class="bg-dark-800 border border-slate-800 px-3 py-2 rounded-xl flex items-center justify-between sm:justify-start gap-2">
+            <span class="text-emerald-400">Done:</span><span id="statDone" class="text-emerald-400">0</span>
           </div>
         </div>
-        <div id="ganttChart" class="overflow-x-auto min-h-[350px]"></div>
       </div>
-    </section>
 
-    <!-- VIEW 3: ANALYTICS / GRAPHS -->
-    <section id="viewCharts" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h3 class="font-bold text-slate-800 mb-4">Task Status Distribution</h3>
-        <div class="h-64 flex items-center justify-center">
-          <canvas id="statusChart"></canvas>
+      <!-- VIEW 1: TASK LIST & TABLE -->
+      <section id="viewList" class="space-y-4">
+        <!-- Desktop Table -->
+        <div class="hidden md:block bg-dark-800 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead class="bg-dark-900/60 border-b border-slate-800 text-slate-400 font-semibold uppercase text-[11px] tracking-wider">
+              <tr>
+                <th class="p-4">Task Details</th>
+                <th class="p-4">Assigned Member</th>
+                <th class="p-4">Priority</th>
+                <th class="p-4">Timeline</th>
+                <th class="p-4">Status</th>
+                <th class="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="taskTableBody" class="divide-y divide-slate-800/60">
+              <tr><td colspan="6" class="p-8 text-center text-slate-500">Retrieving workspace tasks...</td></tr>
+            </tbody>
+          </table>
         </div>
-      </div>
-      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h3 class="font-bold text-slate-800 mb-4">Workload by Priority</h3>
-        <div class="h-64 flex items-center justify-center">
-          <canvas id="priorityChart"></canvas>
+
+        <!-- Mobile Cards -->
+        <div id="taskMobileCards" class="grid grid-cols-1 gap-3 md:hidden">
+          <!-- Rendered dynamically -->
         </div>
+      </section>
+
+      <!-- VIEW 2: GANTT TIMELINE -->
+      <section id="viewGantt" class="hidden">
+        <div class="bg-dark-800 p-5 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+          <div class="flex justify-between items-center">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider">Task Schedule</h3>
+            <div class="flex bg-dark-900 p-1 rounded-lg border border-slate-800 text-[11px] font-semibold">
+              <button onclick="changeGanttMode('Day')" class="px-2.5 py-1 rounded text-slate-400 hover:text-white">Day</button>
+              <button onclick="changeGanttMode('Week')" class="px-2.5 py-1 rounded bg-dark-700 text-white">Week</button>
+              <button onclick="changeGanttMode('Month')" class="px-2.5 py-1 rounded text-slate-400 hover:text-white">Month</button>
+            </div>
+          </div>
+          <div id="ganttChart" class="overflow-x-auto min-h-[350px] rounded-xl border border-slate-800/80 bg-dark-900 p-2"></div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: ANALYTICS -->
+      <section id="viewCharts" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-dark-800 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Task Status Distribution</h3>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+        <div class="bg-dark-800 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Priority Breakdown</h3>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="priorityChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ================= TASK MODAL ================= -->
+  <div id="taskModal" class="fixed inset-0 bg-dark-900/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+    <div class="bg-dark-800 border border-slate-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 id="modalTitle" class="text-base font-bold text-white">Create New Task</h2>
+        <button onclick="closeTaskModal()" class="text-slate-400 hover:text-white">✕</button>
       </div>
-    </section>
 
-  </main>
-
-  <!-- Create/Edit Modal -->
-  <div id="taskModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
-      <h2 id="modalTitle" class="text-lg font-bold text-slate-900">Create New Task</h2>
-      <form id="taskForm" onsubmit="submitTask(event)" class="space-y-3">
+      <form id="taskForm" onsubmit="submitTask(event)" class="space-y-3.5 text-xs">
         <input type="hidden" id="formTaskId" />
-        
+
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Title</label>
-          <input type="text" id="formTitle" required class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Title</label>
+          <input type="text" id="formTitle" required class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-500" />
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Description</label>
-          <textarea id="formDescription" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Description</label>
+          <textarea id="formDescription" rows="2" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-500"></textarea>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Priority</label>
-            <select id="formPriority" class="w-full border rounded-lg px-3 py-2 text-sm outline-none">
+            <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Priority</label>
+            <select id="formPriority" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-500">
               <option value="High">High</option>
               <option value="Medium" selected>Medium</option>
               <option value="Low">Low</option>
             </select>
           </div>
           <div id="assigneeWrapper">
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Assign To</label>
-            <select id="formAssignedTo" class="w-full border rounded-lg px-3 py-2 text-sm outline-none"></select>
+            <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Assignee</label>
+            <select id="formAssignedTo" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-500"></select>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Start Date</label>
-            <input type="date" id="formStartDate" class="w-full border rounded-lg px-3 py-2 text-sm outline-none" />
+            <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Start Date</label>
+            <input type="date" id="formStartDate" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-500" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Deadline</label>
-            <input type="date" id="formDeadline" required class="w-full border rounded-lg px-3 py-2 text-sm outline-none" />
+            <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Deadline</label>
+            <input type="date" id="formDeadline" required class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-500" />
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Tags (Comma-separated)</label>
-          <input type="text" id="formTags" placeholder="Feature, Urgent, Client" class="w-full border rounded-lg px-3 py-2 text-sm outline-none" />
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Tags (Comma-separated)</label>
+          <input type="text" id="formTags" placeholder="Feature, Urgent, Client" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-500" />
         </div>
 
-        <div class="flex justify-end gap-2 pt-3 border-t">
-          <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-sm text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Cancel</button>
-          <button type="submit" class="px-4 py-2 text-sm bg-blue-600 text-white font-medium hover:bg-blue-700 rounded-lg">Save Task</button>
+        <div class="flex justify-end gap-2 pt-4 border-t border-slate-700/60">
+          <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-slate-400 hover:text-white rounded-xl">Cancel</button>
+          <button type="submit" id="saveTaskBtn" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition shadow-lg shadow-indigo-600/30">Save Task</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Application Logic -->
+  <!-- ================= APP CLIENT ENGINE ================= -->
   <script>
-    // PASTE YOUR APPS SCRIPT WEB APP URL HERE:
+    // REPLACE WITH YOUR APPS SCRIPT WEB APP URL:
     const API_URL = "https://script.google.com/macros/s/AKfycbw0oI-CMVrWt85m5fGnAyGRrZmjX9PuY_XoysQg5fEoU_Sr0jFpHqNAyxYtw1PxjfDkgA/exec";
 
     let state = {
       currentUser: null,
-      users: [],
+      assignableUsers: [],
       tasks: [],
+      activeView: 'list',
       ganttInstance: null,
       statusChart: null,
       priorityChart: null
     };
 
-    async function init() {
-      // 1. Fetch assignable users
-      const res = await fetch(`${API_URL}?action=getAssignableUsers`);
-      state.users = await res.json();
-      
-      const userSelect = document.getElementById("userSelector");
-      const formAssignSelect = document.getElementById("formAssignedTo");
-      
-      userSelect.innerHTML = "";
-      formAssignSelect.innerHTML = "";
+    window.onload = () => {
+      const cached = localStorage.getItem('taskhub_user');
+      if (cached) {
+        state.currentUser = JSON.parse(cached);
+        startApp();
+      } else {
+        document.getElementById('loginScreen').classList.remove('hidden');
+      }
+    };
 
-      state.users.forEach((u, i) => {
-        userSelect.innerHTML += `<option value="${u.email}">${u.name} (${u.role})</option>`;
-        formAssignSelect.innerHTML += `<option value="${u.email}">${u.name} (${u.email})</option>`;
-      });
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const alertBox = document.getElementById('loginAlert');
+      const submitBtn = document.getElementById('loginSubmitBtn');
 
-      // Default user
-      state.currentUser = state.users[0];
-      updateUserContextUI();
+      alertBox.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = 'Verifying credentials...';
+
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'login', userEmail: email })
+        });
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        state.currentUser = data.user;
+        localStorage.setItem('taskhub_user', JSON.stringify(data.user));
+        startApp();
+      } catch (err) {
+        alertBox.textContent = err.message || 'Login failed.';
+        alertBox.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Authenticate & Enter';
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('taskhub_user');
+      location.reload();
+    }
+
+    async function startApp() {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('appContainer').classList.remove('hidden');
+
+      document.getElementById('userNameDisplay').textContent = state.currentUser.name;
+      document.getElementById('userEmailDisplay').textContent = state.currentUser.email;
+
+      const badge = document.getElementById('roleBadge');
+      badge.textContent = state.currentUser.role;
+      badge.className = `text-[11px] px-2.5 py-0.5 rounded-full font-bold ml-1 ${
+        state.currentUser.isAdmin 
+          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
+          : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+      }`;
+
+      // Admin or Member controls
+      document.getElementById('assigneeWrapper').style.display = state.currentUser.isAdmin ? 'block' : 'none';
+
+      await loadAssignableUsers();
       await fetchTasks();
     }
 
-    function switchUser() {
-      const selectedEmail = document.getElementById("userSelector").value;
-      state.currentUser = state.users.find(u => u.email === selectedEmail);
-      updateUserContextUI();
-      fetchTasks();
-    }
-
-    function updateUserContextUI() {
-      const badge = document.getElementById("roleBadge");
-      const isAdmin = state.currentUser.role.toLowerCase() === 'admin';
-      badge.textContent = state.currentUser.role;
-      badge.className = `text-xs px-2.5 py-0.5 rounded-full font-semibold ml-2 ${
-        isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-      }`;
-      document.getElementById("assigneeWrapper").style.display = isAdmin ? 'block' : 'none';
+    async function loadAssignableUsers() {
+      try {
+        const res = await fetch(`${API_URL}?action=getAssignableUsers`);
+        state.assignableUsers = await res.json();
+        const select = document.getElementById('formAssignedTo');
+        select.innerHTML = '';
+        state.assignableUsers.forEach(u => {
+          select.innerHTML += `<option value="${u.email}">${u.name} (${u.role})</option>`;
+        });
+      } catch (err) {
+        console.error('Failed to load assignable users', err);
+      }
     }
 
     async function fetchTasks() {
-      const res = await fetch(`${API_URL}?action=getTasks&userEmail=${encodeURIComponent(state.currentUser.email)}`);
-      state.tasks = await res.json();
-      renderTasks();
-      updateStats();
-      renderCharts();
+      try {
+        const res = await fetch(`${API_URL}?action=getTasks&userEmail=${encodeURIComponent(state.currentUser.email)}`);
+        state.tasks = await res.json();
+        renderTasks();
+        updateStats();
+        if (state.activeView === 'gantt') renderGantt();
+        if (state.activeView === 'charts') renderCharts();
+      } catch (err) {
+        console.error('Error fetching tasks', err);
+      }
     }
 
     function renderTasks() {
       const tbody = document.getElementById("taskTableBody");
+      const mobileList = document.getElementById("taskMobileCards");
+
       if (!state.tasks.length) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">No tasks found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-500">No tasks currently assigned to you.</td></tr>`;
+        mobileList.innerHTML = `<div class="p-8 text-center text-slate-500 bg-dark-800 rounded-xl border border-slate-800">No tasks currently assigned.</div>`;
         return;
       }
 
+      // 1. Render Desktop Rows
       tbody.innerHTML = state.tasks.map(t => {
-        const priorityColors = {
-          High: 'bg-rose-100 text-rose-700',
-          Medium: 'bg-amber-100 text-amber-700',
-          Low: 'bg-emerald-100 text-emerald-700'
-        }[t.Priority] || 'bg-slate-100 text-slate-700';
+        const priorityBadge = {
+          High: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
+          Medium: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+          Low: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+        }[t.Priority] || 'bg-slate-700 text-slate-300';
 
-        const statusBadge = t.derivedStatus === 'Overdue' 
-          ? `<span class="px-2.5 py-1 bg-red-100 text-red-700 font-bold rounded-md text-xs">⚠️ Overdue</span>`
-          : `<span class="px-2.5 py-1 bg-slate-100 text-slate-700 font-semibold rounded-md text-xs">${t.Status}</span>`;
+        const statusBadge = t.derivedStatus === 'Overdue'
+          ? `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse">⚠️ Overdue</span>`
+          : `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-dark-900 border border-slate-700 text-slate-300">${t.Status}</span>`;
 
-        // Permission: Delete button appears ONLY if user is Admin OR self-created & assigned
-        const deleteBtn = t.canDelete 
-          ? `<button onclick="deleteTask('${t.Task_ID}')" class="text-rose-600 hover:text-rose-800 p-1" title="Delete">🗑️</button>` 
-          : `<span class="text-slate-300 p-1 cursor-not-allowed" title="Assigned by Manager - Cannot delete">🔒</span>`;
+        const deleteAction = t.canDelete 
+          ? `<button onclick="deleteTask('${t.Task_ID}')" class="text-slate-400 hover:text-rose-400 p-1" title="Delete">🗑️</button>` 
+          : `<span class="text-slate-600 p-1 cursor-not-allowed" title="Assigned by Admin">🔒</span>`;
 
         return `
-          <tr class="hover:bg-slate-50/80 transition">
+          <tr class="hover:bg-dark-700/40 transition">
             <td class="p-4">
-              <div class="font-semibold text-slate-900">${t.Title}</div>
-              <div class="text-xs text-slate-400">${t.Description || 'No details'}</div>
-              <div class="mt-1">${(t.Tags || '').split(',').filter(Boolean).map(tag => `<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded mr-1">#${tag.trim()}</span>`).join('')}</div>
+              <div class="font-semibold text-white">${t.Title}</div>
+              <div class="text-xs text-slate-400">${t.Description || 'No description'}</div>
+              <div class="mt-1 flex flex-wrap gap-1">${(t.Tags || '').split(',').filter(Boolean).map(tag => `<span class="text-[10px] bg-dark-900 text-slate-400 px-2 py-0.5 rounded-md border border-slate-800">#${tag.trim()}</span>`).join('')}</div>
             </td>
-            <td class="p-4 text-xs font-medium text-slate-600">${t.Assigned_To}</td>
-            <td class="p-4"><span class="px-2 py-0.5 rounded text-xs font-semibold ${priorityColors}">${t.Priority}</span></td>
-            <td class="p-4 text-xs text-slate-500">
+            <td class="p-4 text-xs text-slate-300">${t.Assigned_To}</td>
+            <td class="p-4"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${priorityBadge}">${t.Priority}</span></td>
+            <td class="p-4 text-xs text-slate-400">
               <div>Start: ${t.Start_Date || '-'}</div>
-              <div>Due: ${t.Deadline || '-'}</div>
+              <div class="text-slate-300 font-medium">Due: ${t.Deadline || '-'}</div>
             </td>
             <td class="p-4">${statusBadge}</td>
             <td class="p-4 text-right">
-              <select onchange="updateStatus('${t.Task_ID}', this.value)" class="text-xs border rounded px-1.5 py-1 mr-2 outline-none">
+              <select onchange="updateStatus('${t.Task_ID}', this.value)" class="text-xs bg-dark-900 border border-slate-700 rounded-lg px-2 py-1 text-slate-300 mr-2 outline-none">
                 <option value="Not Started" ${t.Status === 'Not Started' ? 'selected' : ''}>Not Started</option>
                 <option value="In Progress" ${t.Status === 'In Progress' ? 'selected' : ''}>In Progress</option>
                 <option value="Completed" ${t.Status === 'Completed' ? 'selected' : ''}>Completed</option>
               </select>
-              ${deleteBtn}
+              ${deleteAction}
             </td>
           </tr>
+        `;
+      }).join('');
+
+      // 2. Render Responsive Mobile Cards
+      mobileList.innerHTML = state.tasks.map(t => {
+        const deleteAction = t.canDelete 
+          ? `<button onclick="deleteTask('${t.Task_ID}')" class="text-rose-400 p-1">🗑️</button>` 
+          : `<span class="text-slate-600 p-1">🔒</span>`;
+
+        return `
+          <div class="bg-dark-800 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div class="flex justify-between items-start gap-2">
+              <h4 class="font-bold text-white text-sm">${t.Title}</h4>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                t.derivedStatus === 'Overdue' ? 'bg-rose-500/20 text-rose-400' : 'bg-dark-900 text-slate-300'
+              }">${t.derivedStatus}</span>
+            </div>
+            <p class="text-xs text-slate-400">${t.Description || 'No description'}</p>
+            <div class="flex justify-between items-center text-xs text-slate-400 border-t border-slate-800/80 pt-2">
+              <span>Due: ${t.Deadline}</span>
+              <div class="flex items-center gap-2">
+                <select onchange="updateStatus('${t.Task_ID}', this.value)" class="bg-dark-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1">
+                  <option value="Not Started" ${t.Status === 'Not Started' ? 'selected' : ''}>Not Started</option>
+                  <option value="In Progress" ${t.Status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                  <option value="Completed" ${t.Status === 'Completed' ? 'selected' : ''}>Completed</option>
+                </select>
+                ${deleteAction}
+              </div>
+            </div>
+          </div>
         `;
       }).join('');
     }
@@ -288,10 +437,10 @@
       const overdue = state.tasks.filter(t => t.derivedStatus === 'Overdue').length;
       const pending = total - completed;
 
-      document.getElementById('statTotal').innerText = `Total: ${total}`;
-      document.getElementById('statPending').innerText = `Pending: ${pending}`;
-      document.getElementById('statOverdue').innerText = `Overdue: ${overdue}`;
-      document.getElementById('statDone').innerText = `Done: ${completed}`;
+      document.getElementById('statTotal').innerText = total;
+      document.getElementById('statPending').innerText = pending;
+      document.getElementById('statOverdue').innerText = overdue;
+      document.getElementById('statDone').innerText = completed;
     }
 
     async function updateStatus(taskId, status) {
@@ -315,6 +464,10 @@
 
     async function submitTask(e) {
       e.preventDefault();
+      const saveBtn = document.getElementById('saveTaskBtn');
+      saveBtn.disabled = true;
+      saveBtn.innerText = 'Saving...';
+
       const payload = {
         action: 'saveTask',
         userEmail: state.currentUser.email,
@@ -322,7 +475,9 @@
           Title: document.getElementById('formTitle').value,
           Description: document.getElementById('formDescription').value,
           Priority: document.getElementById('formPriority').value,
-          Assigned_To: document.getElementById('formAssignedTo').value || state.currentUser.email,
+          Assigned_To: state.currentUser.isAdmin 
+            ? document.getElementById('formAssignedTo').value 
+            : state.currentUser.email,
           Start_Date: document.getElementById('formStartDate').value,
           Deadline: document.getElementById('formDeadline').value,
           Tags: document.getElementById('formTags').value,
@@ -330,20 +485,26 @@
         }
       };
 
-      await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-      closeTaskModal();
-      fetchTasks();
+      try {
+        await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+        closeTaskModal();
+        await fetchTasks();
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Save Task';
+      }
     }
 
     function switchView(view) {
+      state.activeView = view;
       document.getElementById('viewList').classList.toggle('hidden', view !== 'list');
       document.getElementById('viewGantt').classList.toggle('hidden', view !== 'gantt');
       document.getElementById('viewCharts').classList.toggle('hidden', view !== 'charts');
 
       ['tabList', 'tabGantt', 'tabCharts'].forEach(t => {
-        document.getElementById(t).className = "px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition";
+        document.getElementById(t).className = "px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition";
       });
-      document.getElementById(`tab${view.charAt(0).toUpperCase() + view.slice(1)}`).className = "px-4 py-1.5 rounded-lg bg-white shadow-sm text-slate-900 transition";
+      document.getElementById(`tab${view.charAt(0).toUpperCase() + view.slice(1)}`).className = "px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white shadow-sm transition";
 
       if (view === 'gantt') renderGantt();
       if (view === 'charts') renderCharts();
@@ -362,7 +523,7 @@
       }));
 
       if (!formatted.length) {
-        container.innerHTML = `<div class="p-6 text-center text-slate-400">No scheduled tasks for timeline.</div>`;
+        container.innerHTML = `<div class="p-8 text-center text-slate-500">No scheduled tasks with dates available.</div>`;
         return;
       }
 
@@ -383,18 +544,24 @@
       state.tasks.forEach(t => {
         if (t.derivedStatus === 'Overdue') statusCounts.Overdue++;
         else statusCounts[t.Status] = (statusCounts[t.Status] || 0) + 1;
-
         priorityCounts[t.Priority] = (priorityCounts[t.Priority] || 0) + 1;
       });
 
       if (state.statusChart) state.statusChart.destroy();
       if (state.priorityChart) state.priorityChart.destroy();
 
+      Chart.defaults.color = '#94a3b8';
+      Chart.defaults.borderColor = '#1e293b';
+
       state.statusChart = new Chart(document.getElementById('statusChart'), {
         type: 'doughnut',
         data: {
           labels: ['Completed', 'In Progress', 'Not Started', 'Overdue'],
-          datasets: [{ data: [statusCounts.Completed, statusCounts["In Progress"], statusCounts["Not Started"], statusCounts.Overdue], backgroundColor: ['#10b981', '#3b82f6', '#94a3b8', '#ef4444'] }]
+          datasets: [{
+            data: [statusCounts.Completed, statusCounts["In Progress"], statusCounts["Not Started"], statusCounts.Overdue],
+            backgroundColor: ['#10b981', '#6366f1', '#64748b', '#f43f5e'],
+            borderWidth: 0
+          }]
         },
         options: { responsive: true, maintainAspectRatio: false }
       });
@@ -403,7 +570,12 @@
         type: 'bar',
         data: {
           labels: ['High', 'Medium', 'Low'],
-          datasets: [{ label: 'Tasks', data: [priorityCounts.High, priorityCounts.Medium, priorityCounts.Low], backgroundColor: ['#f43f5e', '#f59e0b', '#10b981'] }]
+          datasets: [{
+            label: 'Total Tasks',
+            data: [priorityCounts.High, priorityCounts.Medium, priorityCounts.Low],
+            backgroundColor: ['#f43f5e', '#f59e0b', '#10b981'],
+            borderRadius: 6
+          }]
         },
         options: { responsive: true, maintainAspectRatio: false }
       });
@@ -411,8 +583,6 @@
 
     function openTaskModal() { document.getElementById('taskModal').classList.replace('hidden', 'flex'); }
     function closeTaskModal() { document.getElementById('taskModal').classList.replace('flex', 'hidden'); }
-
-    window.onload = init;
   </script>
 </body>
 </html>
